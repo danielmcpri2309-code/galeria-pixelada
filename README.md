@@ -194,3 +194,12 @@ Después: controles WASD y optimización del movimiento.
 - **Fuentes**: [VT323](https://fonts.google.com/specimen/VT323) y
   [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk), de Google Fonts.
 - **Fondo de la portada**: Vincent van Gogh, *Campo de trigo con cipreses* (1889).
+
+## Licencia
+
+El código de este proyecto se distribuye con la [licencia MIT](LICENSE): puedes usarlo, copiarlo y
+modificarlo libremente, siempre que mantengas el aviso de copyright.
+
+La licencia cubre el código, no las obras ni las fuentes. Las imágenes de los cuadros son de dominio
+público (Open Access CC0 del Met) y se cargan desde los servidores del museo; las fuentes VT323 y
+Space Grotesk tienen su propia licencia (SIL Open Font License) y se cargan desde Google Fonts.
