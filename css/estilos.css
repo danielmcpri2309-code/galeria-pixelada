@@ -1,0 +1,945 @@
+/* =============================================================
+   estilos.css — estilos base de Galería
+   -------------------------------------------------------------
+   Los colores se guardan como variables CSS (custom properties)
+   para usar la misma paleta en todo el proyecto. Son los mismos
+   valores que la constante PALETA de js/museo.js.
+   ============================================================= */
+
+:root {
+  /* Pared (oscuro → claro). El 0 y el 4 son la sombra y la luz de los focos */
+  --pared-0: #3E5A5D;
+  --pared-1: #5F8487;
+  --pared-2: #7A9FA1;
+  --pared-3: #9DBDBB;
+  --pared-4: #C2D6D0;
+
+  /* Suelo */
+  --suelo-0: #6E664E;
+  --suelo-1: #8E8466;
+  --suelo-2: #B9A985;
+  --suelo-3: #D6C7A1;
+  --suelo-4: #E8DCBA;
+
+  /* Techo y paneles */
+  --negro-1: #0E0F10;
+  --negro-2: #1B1C1E;
+  --negro-3: #2A2C30;
+  --negro-4: #3A3D42;
+
+  /* Acento azul "glitch" */
+  --azul: #2D6BFF;
+  --azul-claro: #6FA0FF;
+
+  /* Texto */
+  --texto: #F2F2EE;
+  --texto-tenue: #9A9B98;
+
+  /* Tipografías (con fuentes de reserva por si no cargan) */
+  --fuente-pixel: "VT323", ui-monospace, "Consolas", monospace;
+  --fuente-texto: "Space Grotesk", system-ui, "Segoe UI", sans-serif;
+
+  /* Alto del panel inferior: entre 100 y 200 px, según la pantalla */
+  --alto-hud: clamp(100px, 20vh, 200px);
+}
+
+/* Reinicio mínimo: sin márgenes y con un modelo de caja predecible */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--negro-1);
+  color: var(--texto);
+  font-family: var(--fuente-texto);
+  overflow: hidden;            /* es un juego: nada de barras de scroll */
+}
+
+/* ---------- Estructura: escena arriba, HUD abajo ---------- */
+
+#juego {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;              /* en móvil, descuenta las barras del navegador */
+}
+
+#escena {
+  position: relative;
+  flex: 1;                     /* ocupa todo el alto que deje libre el HUD */
+  overflow: hidden;
+  background: var(--pared-2);
+}
+
+/* La clave del estilo pixelado: al ampliar un canvas, el navegador
+   copia cada píxel tal cual en vez de difuminarlo. */
+#lienzo-frente,
+.tramo {
+  image-rendering: crisp-edges;   /* nombre antiguo (Firefox) */
+  image-rendering: pixelated;     /* nombre estándar */
+}
+
+/* El personaje va en un canvas transparente por delante de todo.
+   pointer-events: none deja pasar los clics a lo que hay debajo. */
+#lienzo-frente {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* ---------- El mundo (lo que mueve la cámara) ----------
+   Todo lo de dentro se coloca en PÍXELES LÓGICOS con variables CSS.
+   JavaScript define --px (cuántos píxeles CSS mide un píxel lógico)
+   y --alto (alto de la escena en píxeles lógicos); el CSS multiplica.
+   Ejemplo: left: calc(var(--x) * var(--px)) con --x = 100 y --px = 3px
+   da left: 300px. */
+
+#mundo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--ancho-mundo) * var(--px));
+  height: calc(var(--alto) * var(--px));
+  will-change: transform;   /* avisa al navegador: esto se moverá mucho */
+}
+
+/* Un canvas de entorno por sala */
+.tramo {
+  position: absolute;
+  top: 0;
+  left: calc(var(--x) * var(--px));
+  width: calc(var(--ancho) * var(--px));
+  height: 100%;
+}
+
+/* ---------- Cuadros ---------- */
+
+.cuadro {
+  position: absolute;
+  left: calc(var(--izq) * var(--px));
+  bottom: calc(var(--abajo) * var(--px));
+}
+
+.cuadro__lienzo {
+  position: relative;        /* las dos capas de dentro se apilan sobre él */
+  box-sizing: content-box;   /* el marco va por fuera del tamaño de la imagen */
+  width: calc(var(--w) * var(--px));
+  height: calc(var(--h) * var(--px));
+  border: calc(var(--marco) * var(--px)) solid var(--negro-2);
+  /* Mientras carga: un damero de dos verdes, que es el dithering más
+     simple que existe (50 % de cada color). Se hace con un degradado
+     cónico que se repite cada 2×2 píxeles lógicos. */
+  background:
+    repeating-conic-gradient(var(--pared-1) 0 25%, var(--pared-0) 0 50%)
+    0 0 / calc(var(--px) * 2) calc(var(--px) * 2);
+  /* Sombra dura, sin difuminar, como en el pixel art */
+  box-shadow: calc(var(--px) * 2) calc(var(--px) * 2) 0 rgba(14, 15, 16, 0.3);
+}
+
+/* Dos capas, una encima de otra:
+   · .cuadro__pixelado: canvas con el cuadro pixelado (paleta del museo)
+   · .cuadro__imagen: la imagen real, que se descubre con una máscara */
+.cuadro__pixelado,
+.cuadro__imagen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.6s ease;   /* aparecen con un fundido al cargar */
+}
+
+.cuadro__pixelado {
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+.cuadro__imagen {
+  object-fit: cover;
+  /* La máscara es un dibujo de 4×4 celdas que se repite; cada celda
+     mide exactamente un píxel lógico, así que la imagen real aparece
+     alineada con los píxeles del cuadro pixelado. */
+  -webkit-mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+}
+
+.cuadro--cargado .cuadro__pixelado,
+.cuadro--cargado .cuadro__imagen {
+  opacity: 1;
+}
+
+.cuadro--error .cuadro__lienzo::after {
+  content: "imagen no disponible";
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--px);
+  color: var(--texto);
+  font-family: var(--fuente-pixel);
+  font-size: max(11px, calc(var(--px) * 4));
+  text-align: center;
+}
+
+/* Cartela: una tarjeta pequeña bajo el cuadro */
+.cartela {
+  position: absolute;
+  top: calc(100% + var(--px) * 4);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;                    /* tan ancha como su texto… */
+  max-width: calc(var(--px) * 90);       /* …pero con un límite */
+  padding: var(--px) calc(var(--px) * 2);
+  background: var(--suelo-4);
+  color: var(--negro-2);
+  font-family: var(--fuente-pixel);
+  font-size: max(11px, calc(var(--px) * 4));
+  line-height: 1;
+  box-shadow: var(--px) var(--px) 0 rgba(14, 15, 16, 0.3);
+}
+
+.cartela__titulo,
+.cartela__autor {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;   /* "…" si el título no cabe */
+}
+
+.cartela__autor {
+  color: var(--negro-4);
+}
+
+/* ---------- Rótulos de sala (texto pintado en la pared) ---------- */
+
+.rotulo {
+  position: absolute;
+  left: calc(var(--izq) * var(--px));
+  bottom: calc(var(--arriba) * var(--px));
+  width: calc(var(--ancho-rotulo) * var(--px));
+  /* --arriba marca dónde va el borde SUPERIOR: colocamos el borde de
+     abajo ahí y lo bajamos su propia altura. */
+  transform: translateY(100%);
+  color: var(--negro-2);
+}
+
+.rotulo__numero {
+  font-family: var(--fuente-pixel);
+  font-size: calc(var(--px) * 18);
+  line-height: 0.8;
+  /* Copia azul desplazada un píxel: efecto "glitch" */
+  text-shadow: var(--px) 0 0 var(--azul);
+}
+
+.rotulo__nombre {
+  margin-top: calc(var(--px) * 2);
+  font-family: var(--fuente-pixel);
+  font-size: max(18px, calc(var(--px) * 7.5));
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.rotulo__anios {
+  margin-top: calc(var(--px) * 1.5);
+  font-family: var(--fuente-pixel);
+  font-size: max(14px, calc(var(--px) * 5));
+  line-height: 1;
+}
+
+/* Una rayita azul delante de los años */
+.rotulo__anios::before {
+  content: "";
+  display: inline-block;
+  width: calc(var(--px) * 6);
+  height: var(--px);
+  margin-right: calc(var(--px) * 2);
+  vertical-align: middle;
+  background: var(--azul);
+}
+
+/* El texto pequeño sobre una pared con dithering cuesta de leer:
+   lo hacemos opaco, con algo de peso y nunca menor de 12 px. */
+.rotulo__texto {
+  margin-top: calc(var(--px) * 3);
+  font-size: max(12px, calc(var(--px) * 4.2));
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--negro-2);
+}
+
+.rotulo--final .rotulo__nombre {
+  font-size: max(18px, calc(var(--px) * 6));
+}
+
+/* ---------- HUD (panel inferior) ---------- */
+
+#hud {
+  flex: 0 0 auto;
+  height: var(--alto-hud);
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--negro-2);
+  border-top: 2px solid var(--negro-3);
+}
+
+/* Cada bloque del HUD es una "pantalla", como los monitores
+   de la torre de control de la referencia. */
+.pantalla {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--negro-1);
+  border: 1px solid var(--negro-3);
+  border-radius: 4px;
+  font-family: var(--fuente-pixel);
+  line-height: 1.1;
+  overflow: hidden;
+}
+
+/* Si no cabe todo, que se corte lo de abajo, pero que ninguna línea
+   se encoja hasta desaparecer (en flex, los hijos encogen por defecto). */
+.pantalla > * {
+  flex-shrink: 0;
+}
+
+/* Reparto del ancho: la cartela se lleva más; min-width: 0 deja que
+   el texto largo se recorte en vez de ensanchar la pantalla. */
+.pantalla--obra {
+  flex: 2 1 0;
+  min-width: 0;
+}
+
+.pantalla--recorrido {
+  flex: 1.3 1 0;
+  min-width: 0;
+}
+
+.pantalla--controles {
+  flex: 0 0 auto;
+}
+
+/* Fila de arriba de cada pantalla: etiqueta azul a la izquierda y
+   un dato extra a la derecha */
+.etiqueta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--azul-claro);
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.etiqueta__extra {
+  color: var(--texto-tenue);
+  letter-spacing: 0.06em;
+}
+
+.etiqueta__extra strong {
+  font-weight: 400;
+  color: var(--texto);
+}
+
+/* Título de la obra (o nombre de la sala) en la sans moderna */
+.hud-titulo {
+  margin: 2px 0;
+  font-family: var(--fuente-texto);
+  font-size: clamp(17px, 2.8vh, 26px);
+  font-weight: 500;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dato {
+  font-size: 19px;
+  color: var(--texto);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dato--tenue {
+  color: var(--texto-tenue);
+}
+
+/* El mapa del recorrido: un canvas pequeño ampliado sin suavizar */
+.mapa-contenedor {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.mapa {
+  display: block;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* Destello al sumar una obra vista: parpadea en azul unas veces.
+   steps(1) hace que cambie de golpe, sin transición suave (más "pixel"). */
+.destello {
+  animation: destello 0.24s steps(1) 4;
+}
+
+@keyframes destello {
+  50% {
+    color: var(--negro-1);
+    background: var(--azul-claro);
+  }
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  font-family: var(--fuente-pixel);
+  font-size: 18px;
+  text-align: center;
+  color: var(--texto);
+  background: var(--negro-2);
+  border: 1px solid var(--negro-3);
+  border-radius: 3px;
+}
+
+kbd + kbd {
+  margin-left: 3px;
+}
+
+/* En pantallas estrechas sobra la pantalla de controles
+   (en las táctiles ya hay botones en pantalla). */
+@media (max-width: 900px) {
+  .pantalla--controles {
+    display: none;
+  }
+}
+
+/* En pantallas bajas (portátiles pequeños, móvil en horizontal)
+   el HUD es más compacto para que quepa todo. */
+@media (max-height: 520px) {
+  #hud {
+    gap: 8px;
+    padding: 8px;
+  }
+  .pantalla {
+    gap: 0;
+    padding: 5px 10px;
+  }
+  .etiqueta {
+    font-size: 15px;
+  }
+  .hud-titulo {
+    margin: 0;
+    font-size: 17px;
+  }
+  .dato {
+    font-size: 16px;
+    line-height: 1.05;
+  }
+  .mapa-contenedor {
+    margin-top: 4px;
+  }
+}
+
+
+/* =============================================================
+   Visor de obra (un <dialog> a pantalla completa)
+   ============================================================= */
+
+.visor {
+  /* Un <dialog> trae tamaño, borde y fondo propios: los quitamos */
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: clamp(16px, 4vw, 48px);
+  border: none;
+  background: rgba(14, 15, 16, 0.96);
+  color: var(--texto);
+  font-family: var(--fuente-texto);
+}
+
+.visor[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ::backdrop es la capa que el navegador pone detrás de un dialog modal */
+.visor::backdrop {
+  background: transparent;
+}
+
+.visor:focus {
+  outline: none;
+}
+
+.visor__contenido {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 3vw, 48px);
+  width: 100%;
+  max-width: 1400px;
+  height: 100%;
+}
+
+.visor__marco {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visor__imagen {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 6px solid var(--negro-2);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.5);   /* sombra dura */
+  /* Misma máscara de Bayer que los cuadros, para aparecer "píxel a píxel" */
+  -webkit-mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+}
+
+.visor__ficha {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* En la ficha la etiqueta sí puede ocupar varias líneas */
+.visor__ficha .etiqueta {
+  white-space: normal;
+}
+
+.visor__titulo {
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* Lista de datos: dos columnas (nombre del dato | valor) con grid */
+.visor__datos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  align-items: baseline;
+}
+
+.visor__datos dt {
+  font-family: var(--fuente-pixel);
+  font-size: 17px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--azul-claro);
+}
+
+.visor__datos dd {
+  font-size: 16px;
+}
+
+.visor__estado {
+  min-height: 1.2em;
+  font-family: var(--fuente-pixel);
+  font-size: 18px;
+  color: var(--texto-tenue);
+}
+
+/* Cursor parpadeante mientras carga la imagen original */
+.visor__estado--cargando::after {
+  content: "▌";
+  margin-left: 4px;
+  animation: parpadeo 1s steps(1) infinite;
+}
+
+.visor__estado--listo {
+  color: var(--azul-claro);
+}
+
+@keyframes parpadeo {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Enlace de texto con flecha, como el "Más detalles →" de la referencia */
+.enlace-flecha {
+  align-self: flex-start;
+  color: var(--texto);
+  font-size: 17px;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.enlace-flecha:hover,
+.enlace-flecha:focus-visible {
+  border-bottom-color: currentColor;
+}
+
+/* Botón negro en forma de píldora, como el de la referencia */
+.boton-pildora {
+  align-self: flex-start;
+  padding: 11px 24px;
+  font-family: var(--fuente-texto);
+  font-size: 16px;
+  color: var(--texto);
+  background: var(--negro-1);
+  border: 1px solid var(--negro-4);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.boton-pildora:hover,
+.boton-pildora:focus-visible {
+  border-color: var(--azul-claro);
+  outline: none;
+}
+
+.boton-pildora kbd {
+  margin-left: 8px;
+  font-size: 15px;
+}
+
+/* En vertical o pantallas estrechas: imagen arriba y ficha debajo */
+@media (max-width: 800px) {
+  .visor {
+    overflow-y: auto;
+  }
+  .visor[open] {
+    align-items: flex-start;
+  }
+  .visor__contenido {
+    flex-direction: column;
+    height: auto;
+  }
+  .visor__marco {
+    height: auto;
+    width: 100%;
+  }
+  .visor__imagen {
+    max-height: 60dvh;
+  }
+  .visor__ficha {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+/* Los cuadros se pueden abrir también con un clic */
+.cuadro__lienzo {
+  cursor: zoom-in;
+}
+
+/* Y en el mapa se puede elegir sala */
+.mapa {
+  cursor: pointer;
+}
+
+
+/* =============================================================
+   Máscaras de Bayer compartidas
+   ============================================================= */
+
+/* Cualquier elemento que se anime "píxel a píxel" (ver animarMascara)
+   necesita que su máscara de 4×4 celdas se repita al tamaño de pixel */
+.portada,
+.cortinilla {
+  -webkit-mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  mask-size: calc(var(--px) * 4) calc(var(--px) * 4);
+  -webkit-mask-repeat: repeat;
+  mask-repeat: repeat;
+}
+
+/* Fundido a negro al saltar de sala */
+.cortinilla {
+  position: absolute;
+  inset: 0;
+  background: var(--negro-1);
+  pointer-events: none;
+}
+
+
+/* =============================================================
+   Portada
+   ============================================================= */
+
+.portada {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  background: var(--pared-2);   /* mientras carga el cuadro de fondo */
+}
+
+.portada[hidden] {
+  display: none;
+}
+
+.portada__fondo,
+.portada__personaje {
+  position: absolute;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+.portada__fondo {
+  top: 0;
+  left: 0;
+}
+
+/* Centrado horizontal; el tamaño y el "bottom" los pone portada.js */
+.portada__personaje {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.portada__contenido {
+  position: relative;            /* por encima de los canvas */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 1.2vh, 14px);
+  margin-top: clamp(28px, 8vh, 100px);
+  padding: 0 16px;
+  text-align: center;
+  color: var(--texto);
+}
+
+.portada__titulo {
+  font-family: var(--fuente-pixel);
+  font-size: clamp(52px, 8vw, 108px);
+  font-weight: 400;
+  line-height: 0.8;
+  /* Copia azul desplazada: el mismo "glitch" que los rótulos */
+  text-shadow: 3px 0 0 var(--azul);
+}
+
+.portada__frase {
+  max-width: 15em;
+  font-size: clamp(26px, 4.2vw, 60px);
+  font-weight: 400;
+  line-height: 1.08;
+  text-wrap: balance;            /* reparte el texto en líneas parecidas */
+  /* Sombra dura para leerse mejor sobre el cuadro */
+  text-shadow: 0 2px 0 rgba(14, 15, 16, 0.45);
+}
+
+.portada__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px 28px;
+  margin-top: clamp(10px, 2.5vh, 28px);
+}
+
+.portada__acciones .boton-pildora,
+.portada__acciones .enlace-flecha {
+  align-self: center;
+}
+
+.portada__acciones .boton-pildora {
+  padding: 13px 26px;
+  font-size: 17px;
+  background: var(--negro-2);
+  border-color: var(--negro-2);
+}
+
+.portada__acciones .enlace-flecha {
+  text-shadow: 0 2px 0 rgba(14, 15, 16, 0.45);
+}
+
+.portada__progreso {
+  font-family: var(--fuente-pixel);
+  font-size: 19px;
+  text-shadow: 0 2px 0 rgba(14, 15, 16, 0.45);
+}
+
+/* Créditos en la esquina, sin llegar al centro (donde está el personaje) */
+.portada__creditos {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  max-width: min(30%, 360px);
+  font-family: var(--fuente-pixel);
+  font-size: 15px;
+  line-height: 1.1;
+  text-align: right;
+  color: var(--texto-tenue);
+}
+
+/* En pantallas estrechas no hay sitio en la esquina: una franja abajo */
+@media (max-width: 700px) {
+  .portada__creditos {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-width: none;
+    padding: 4px 10px;
+    font-size: 13px;
+    text-align: center;
+    background: rgba(14, 15, 16, 0.85);
+  }
+}
+
+
+/* =============================================================
+   Ayuda "Cómo se juega" (con aspecto de pantalla del HUD)
+   ============================================================= */
+
+.ayuda {
+  width: min(520px, calc(100vw - 32px));
+  margin: auto;
+  padding: 22px 24px;
+  color: var(--texto);
+  background: var(--negro-1);
+  border: 1px solid var(--negro-3);
+  border-radius: 6px;
+  font-family: var(--fuente-texto);
+}
+
+.ayuda::backdrop {
+  background: rgba(14, 15, 16, 0.6);
+}
+
+.ayuda__lista {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 16px;
+  align-items: baseline;
+  margin: 16px 0;
+}
+
+.ayuda__lista dt {
+  white-space: nowrap;
+}
+
+.ayuda__lista dd {
+  font-size: 16px;
+}
+
+.ayuda__texto {
+  margin-bottom: 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--texto-tenue);
+}
+
+
+/* =============================================================
+   Controles táctiles
+   ============================================================= */
+
+/* Ocultos por defecto: solo aparecen en pantallas táctiles */
+.tactil {
+  display: none;
+}
+
+.tactil__grupo {
+  display: flex;
+  gap: 12px;
+}
+
+.tactil__boton {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  background: rgba(14, 15, 16, 0.78);
+  border: 2px solid var(--negro-4);
+  border-radius: 6px;
+  /* Sin zoom, scroll ni menú al mantener pulsado, ni el destello azul
+     que algunos móviles ponen al tocar */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tactil__boton.pulsado {
+  background: var(--azul);
+  border-color: var(--azul-claro);
+}
+
+/* El icono es un canvas pequeño con una flecha en pixel art */
+.tactil__boton canvas {
+  width: 28px;
+  height: 28px;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* (hover: none) y (pointer: coarse) = el dispositivo principal es un
+   dedo, no un ratón. Así distinguimos un móvil de una ventana estrecha. */
+@media (hover: none) and (pointer: coarse) {
+  /* En horizontal: botones flotando sobre las esquinas de abajo de la escena */
+  .tactil {
+    position: absolute;
+    right: 12px;
+    bottom: calc(var(--alto-hud) + 12px);
+    left: 12px;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;        /* el hueco entre botones no bloquea nada… */
+  }
+  .tactil__boton {
+    pointer-events: auto;        /* …pero los botones sí reciben los toques */
+  }
+}
+
+/* En vertical: como una consola portátil. El museo arriba con una
+   altura limitada, el HUD debajo y los mandos grandes al final. */
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  #escena {
+    flex: 0 0 auto;
+    height: min(58dvh, 100vw);
+  }
+  #hud {
+    flex-direction: column;
+    height: auto;
+  }
+  .pantalla--obra,
+  .pantalla--recorrido {
+    flex: 0 0 auto;
+  }
+  .tactil {
+    position: static;
+    flex: 1;
+    align-items: center;
+    justify-content: space-around;
+    padding: 12px;
+    background: var(--negro-2);
+  }
+  .tactil__boton {
+    width: 76px;
+    height: 76px;
+  }
+  .tactil__boton canvas {
+    width: 32px;
+    height: 32px;
+  }
+}

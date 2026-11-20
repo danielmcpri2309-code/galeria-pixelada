@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Galería — un museo pixelado</title>
+
+  <!-- Fuentes de Google: VT323 (pixelada, para títulos y datos)
+       y Space Grotesk (sans moderna, para textos). Si no hay
+       internet, el CSS tiene fuentes de reserva. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <main id="juego">
+
+    <!-- La escena, en capas de atrás hacia delante:
+         · #mundo: el entorno pixelado (un canvas por sala) y, encima,
+           los cuadros, rótulos y cartelas. La cámara lo desplaza entero.
+           Su contenido lo crea js/museo.js.
+         · #lienzo-frente: el personaje, siempre por delante.
+         · #cortinilla: un fundido a negro (píxel a píxel) al saltar de sala. -->
+    <div id="escena">
+      <div id="mundo"></div>
+      <canvas id="lienzo-frente"></canvas>
+      <div id="cortinilla" class="cortinilla" hidden></div>
+    </div>
+
+    <!-- HUD: el panel oscuro de abajo, con tres "pantallas" como los
+         monitores de la referencia. Lo rellena js/interfaz.js. -->
+    <footer id="hud">
+      <!-- 1. Cartela de la obra que hay delante (o de la sala) -->
+      <section class="pantalla pantalla--obra" aria-live="polite">
+        <p class="etiqueta">
+          <span id="hud-etiqueta">Sala I</span>
+          <span class="etiqueta__extra" id="hud-extra"></span>
+        </p>
+        <p class="hud-titulo" id="hud-titulo">—</p>
+        <p class="dato" id="hud-linea1">—</p>
+        <p class="dato dato--tenue" id="hud-linea2">—</p>
+      </section>
+
+      <!-- 2. Mapa de las seis salas y contador de obras vistas -->
+      <section class="pantalla pantalla--recorrido">
+        <p class="etiqueta">
+          <span>Recorrido</span>
+          <span class="etiqueta__extra">Vistas <strong id="hud-vistas">0</strong>/<span id="hud-total">119</span></span>
+        </p>
+        <div class="mapa-contenedor" id="hud-mapa-contenedor">
+          <canvas class="mapa" id="hud-mapa" role="img" title="Haz clic en una sala para ir a ella"
+                  aria-label="Mapa de las seis salas con la posición del visitante"></canvas>
+        </div>
+      </section>
+
+      <!-- 3. Pistas de controles -->
+      <section class="pantalla pantalla--controles">
+        <p class="etiqueta">Controles</p>
+        <p class="dato"><kbd>A</kbd><kbd>D</kbd> o <kbd>←</kbd><kbd>→</kbd> andar · <kbd>Mayús</kbd> correr</p>
+        <p class="dato"><kbd>W</kbd> o <kbd>↑</kbd> ver de cerca · <kbd>Esc</kbd> cerrar</p>
+        <p class="dato"><kbd>1</kbd>–<kbd>6</kbd> saltar a una sala</p>
+      </section>
+    </footer>
+
+    <!-- Botones táctiles: solo se ven en pantallas táctiles (ver CSS).
+         Los iconos de flecha se dibujan en pixel art desde juego.js. -->
+    <div class="tactil" id="tactil">
+      <div class="tactil__grupo">
+        <button class="tactil__boton" type="button" data-accion="izquierda" aria-label="Andar a la izquierda"></button>
+        <button class="tactil__boton" type="button" data-accion="derecha" aria-label="Andar a la derecha"></button>
+      </div>
+      <div class="tactil__grupo">
+        <button class="tactil__boton tactil__boton--ver" type="button" data-accion="ver" aria-label="Ver de cerca"></button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Portada, a pantalla completa por encima del museo (js/portada.js) -->
+  <section id="portada" class="portada" aria-labelledby="portada-titulo">
+    <canvas class="portada__fondo" id="portada-fondo"></canvas>
+    <canvas class="portada__personaje" id="portada-personaje"></canvas>
+
+    <div class="portada__contenido">
+      <h1 class="portada__titulo" id="portada-titulo">galería</h1>
+      <p class="portada__frase">un paseo pixelado por <span id="portada-numero">119</span> obras maestras</p>
+      <div class="portada__acciones">
+        <button class="boton-pildora" id="portada-entrar" type="button" autofocus>Entrar al museo</button>
+        <a class="enlace-flecha" id="portada-ayuda" href="#ayuda">Cómo se juega →</a>
+      </div>
+      <p class="portada__progreso" id="portada-progreso" hidden></p>
+    </div>
+
+    <p class="portada__creditos">
+      Imágenes: The Metropolitan Museum of Art, Open Access (CC0) ·
+      Fondo: Vincent van Gogh, <i>Campo de trigo con cipreses</i> (1889)
+    </p>
+  </section>
+
+  <!-- Ayuda "Cómo se juega" -->
+  <dialog id="ayuda" class="ayuda" aria-labelledby="ayuda-titulo">
+    <p class="etiqueta" id="ayuda-titulo">Cómo se juega</p>
+    <dl class="ayuda__lista">
+      <dt><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></dt>  <dd>andar (con <kbd>Mayús</kbd>, correr)</dd>
+      <dt><kbd>W</kbd> / <kbd>↑</kbd> / <kbd>Enter</kbd></dt>     <dd>ver de cerca el cuadro que tienes delante</dd>
+      <dt><kbd>↓</kbd> / <kbd>Esc</kbd></dt>   <dd>cerrar el visor</dd>
+      <dt><kbd>1</kbd>–<kbd>6</kbd></dt>       <dd>saltar a una sala (o haz clic en el mapa)</dd>
+    </dl>
+    <p class="ayuda__texto">
+      Párate delante de un cuadro: el personaje se gira para mirarlo y el cuadro
+      deja de estar pixelado. Las obras que mires cuentan como vistas.
+      En el móvil tienes botones en pantalla.
+    </p>
+    <button class="boton-pildora" id="ayuda-cerrar" type="button">Entendido</button>
+  </dialog>
+
+  <!-- Visor de obra. <dialog> es un elemento nativo para ventanas
+       modales: con showModal() el navegador lo pone encima de todo,
+       atrapa el foco del teclado dentro y lo cierra con Esc. -->
+  <dialog id="visor" class="visor" aria-labelledby="visor-titulo" tabindex="-1">
+    <div class="visor__contenido">
+      <figure class="visor__marco">
+        <img id="visor-imagen" class="visor__imagen" alt="" decoding="async">
+      </figure>
+
+      <div class="visor__ficha">
+        <p class="etiqueta" id="visor-sala">Sala</p>
+        <h2 class="visor__titulo" id="visor-titulo">—</h2>
+        <dl class="visor__datos">
+          <dt>Artista</dt>       <dd id="visor-artista">—</dd>
+          <dt>Origen</dt>        <dd id="visor-nacionalidad">—</dd>
+          <dt>Fecha</dt>         <dd id="visor-fecha">—</dd>
+          <dt>Técnica</dt>       <dd id="visor-tecnica">—</dd>
+        </dl>
+        <p class="visor__estado" id="visor-estado"></p>
+        <a class="enlace-flecha" id="visor-enlace" href="#" target="_blank" rel="noopener">Ver en el Met →</a>
+        <button class="boton-pildora" id="visor-cerrar" type="button">Cerrar <kbd>Esc</kbd></button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Scripts "clásicos" (no módulos ES): así funciona abriendo el
+       archivo con doble clic, sin servidor. Comparten variables
+       globales y el orden de carga importa: primero los datos,
+       luego la paleta, los sprites, el museo, la interfaz, la portada
+       y por último el juego, que usa todo lo anterior. -->
+  <script src="datos/obras.js"></script>
+  <script src="js/dither.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/museo.js"></script>
+  <script src="js/interfaz.js"></script>
+  <script src="js/portada.js"></script>
+  <script src="js/juego.js"></script>
+</body>
+</html>
