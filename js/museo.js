@@ -524,43 +524,66 @@ function ajustarAProporcion(cuadro, anchoNatural, altoNatural) {
 
 
 // -------------------------------------------------------------
-//  Carga de la imagen de un cuadro.
-//  crossOrigin = "anonymous" pide la imagen con CORS: el servidor del
-//  Met responde con permiso y así podemos leer sus píxeles para
-//  pixelarla (ver ditherizarImagen en dither.js). Plan B: si falla, la pedimos sin CORS
-//  (se verá, pero no podremos leer los píxeles).
+//  Imágenes del Met y CORS
+//  Para pixelar un cuadro hay que leer sus píxeles, y el navegador solo
+//  lo permite si la imagen llega con la cabecera CORS. Lo que sabemos
+//  del CDN del Met (comprobado el 20 y el 21/11/2026):
 //
-//  OJO: el CDN del Met guarda en su caché la versión "normal" de cada
-//  imagen SIN la cabecera de CORS (su propia web la pide sin CORS), y
-//  el navegador la rechaza. Si añadimos un parámetro a la URL, el CDN
-//  la trata como otra entrada de caché y sí la envía con la cabecera.
-//  Comprobado el 20/11/2026, también con origen "null" (doble clic).
+//  · La URL "normal" de cada imagen llega SIN la cabecera: el CDN tiene
+//    guardada en caché la copia que pide la propia web del museo.
+//  · Una URL con un parámetro añadido es otra entrada de caché. La
+//    primera vez que alguien la pide, el CDN va al servidor del Met, que
+//    sí añade la cabecera.
+//  · Pero esa copia del CDN puede PERDER la cabecera con el tiempo: al
+//    día siguiente, 65 de los 119 cuadros fallaban con la misma URL.
+//  · Una URL que nadie ha pedido nunca (con un valor único al final)
+//    funciona siempre.
 //
-//  REGLA IMPORTANTE: una URL con este parámetro se pide SIEMPRE con
-//  CORS. Si alguna vez se pidiera sin CORS (por ejemplo, en una <img>
-//  normal), el CDN guardaría esa copia sin cabecera y a partir de ahí
-//  fallaría para todo el mundo (lo comprobamos: pasó con dos cuadros
-//  cuando el visor reutilizaba esta URL). Por eso el visor usa siempre
-//  la URL normal, sin parámetro.
+//  Por eso cada imagen se intenta cargar hasta tres veces, de la forma
+//  más barata a la más segura (ver intentosDeCarga).
+//
+//  REGLA: una URL con PARAMETRO_CORS se pide SIEMPRE con CORS. Pedirla
+//  sin CORS (en una <img> normal) estropearía su copia en el CDN para
+//  todo el mundo. Por eso el visor usa siempre la URL normal.
 // -------------------------------------------------------------
 const PARAMETRO_CORS = "?galeria-cors";
+
+// Los tres intentos para una imagen, en orden:
+//   1. La URL con PARAMETRO_CORS. La comparten todos los visitantes, así
+//      que el CDN suele tenerla en caché y llega deprisa.
+//   2. La misma con un valor único al final ("&r=…"). El CDN no la
+//      tiene, la pide al servidor del Met y llega con la cabecera.
+//   3. Plan B: la URL normal sin CORS. Se ve, pero no se puede pixelar.
+function intentosDeCarga(url) {
+  const unico = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  return [
+    { url: url + PARAMETRO_CORS, cors: true },
+    { url: url + PARAMETRO_CORS + "&r=" + unico, cors: true },
+    { url, cors: false },
+  ];
+}
 
 function cargarCuadro(cuadro) {
   cuadro.estado = "cargando";
   const img = cuadro.img;
+  const intentos = intentosDeCarga(cuadro.obra.imagen);
+  let intento = 0;
 
   // Usamos onload/onerror. (Probamos img.decode(), que descomprime la
   // imagen en otro hilo, pero si el navegador no está pintando
   // fotogramas su promesa puede tardar indefinidamente, y el cuadro no
   // llegaba a cargarse. Lo que ahorraba, unos 2 ms por cuadro, no
   // compensaba ese riesgo.)
-  function pedir(url) {
+  function pedir() {
+    const { url, cors } = intentos[intento];
+    img.crossOrigin = cors ? "anonymous" : null;   // null quita el atributo
     img.onload = alCargar;
     img.onerror = alFallar;
     img.src = url;
   }
 
   function alCargar() {
+    cuadro.sinCors = !intentos[intento].cors;
     const { ancho, alto } = ajustarAProporcion(cuadro, img.naturalWidth, img.naturalHeight);
 
     // Capa pixelada: la imagen reducida a su tamaño en píxeles lógicos
@@ -585,18 +608,16 @@ function cargarCuadro(cuadro) {
   }
 
   function alFallar() {
-    if (!cuadro.sinCors) {
-      cuadro.sinCors = true;
-      img.crossOrigin = null;      // quita el atributo crossorigin
-      pedir(cuadro.obra.imagen);   // y lo intenta otra vez, sin CORS
+    intento++;
+    if (intento < intentos.length) {
+      pedir();   // siguiente intento
       return;
     }
     cuadro.estado = "error";
     cuadro.elemento.classList.add("cuadro--error");
   }
 
-  img.crossOrigin = "anonymous";
-  pedir(cuadro.obra.imagen + PARAMETRO_CORS);
+  pedir();
 }
 
 
@@ -686,6 +707,10 @@ const cuandoHayaTiempo = window.requestIdleCallback
 let generacionProgramada = false;
 
 function prepararZonaVisible(plano, camaraX, vista) {
+  // Si la escena aún no tiene tamaño (la página se abrió sin verse), no
+  // hay nada que generar: un canvas de 0 píxeles daría error.
+  if (vista.ancho <= 0 || vista.alto <= 0) return;
+
   // 1. Lo que se ve YA tiene que estar generado (solo pasa al empezar o
   //    justo después de cambiar el tamaño de la ventana)
   const visibleDesde = camaraX - 8;

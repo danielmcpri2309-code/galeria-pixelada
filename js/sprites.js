@@ -11,30 +11,42 @@
 //
 //  El personaje sale de la referencia: pelo castaño rizado, traje
 //  oscuro y el cuello blanco de la camisa asomando.
+//
+//  Proporciones (filas): cabeza 0–8, cuello 9, cuello de la camisa
+//  10, torso 11–25 (hasta el bajo de la chaqueta), piernas 26–41 y
+//  zapatos 42–43.
 // =============================================================
 
 
 // --- Medidas y tiempos de la animación ---
 const ANCHO_SPRITE = 16;
 const ALTO_SPRITE = 44;
-const LONGITUD_FOTOGRAMA = 9;  // píxeles que avanza el personaje en cada fotograma al andar
+const LONGITUD_FOTOGRAMA = 5;  // píxeles que avanza el personaje en cada fotograma al andar
+const FASE_AL_ARRANCAR = 2;    // fotograma con el que empieza a andar (piernas casi juntas)
 const RETRASO_GIRO = 0.25;     // segundos quieto delante de un cuadro antes de girarse
-const PERIODO_RESPIRAR = 0.9;  // segundos entre "inspirar" y "espirar" cuando está parado
+const PERIODO_RESPIRAR = 1.4;  // segundos entre "inspirar" y "espirar" cuando está parado
 
 
 // --- Qué color es cada letra ---
+// La luz viene de los focos del techo: lo que mira hacia arriba o
+// hacia delante es más claro. La pierna y el brazo del fondo son más
+// oscuros (están en sombra), pero llevan un borde algo más claro para
+// que se lean como una pierna y no como una mancha.
 const COLORES_PERSONAJE = {
   H: "#3A2416",        // pelo oscuro
   h: "#5C3B26",        // pelo
-  c: "#8A5D3B",        // brillo de los rizos
+  c: "#8A5D3B",        // rizos
+  C: "#B07F55",        // brillo de los rizos
   S: "#D9A982",        // piel
-  s: "#A9744F",        // piel en sombra (orejas, cuello, barbilla)
+  s: "#A9744F",        // piel en sombra (oreja, cuello, mandíbula)
   W: PALETA.blanco,    // camisa
   w: "#BFC3C0",        // camisa en sombra
   T: PALETA.carbon,    // traje
-  t: PALETA.grafito,   // traje un poco más claro
-  u: PALETA.humo,      // brillo del traje (donde le da la luz de los focos)
-  K: PALETA.negro,     // sombras, pierna del fondo y zapatos
+  t: PALETA.grafito,   // traje iluminado
+  u: PALETA.humo,      // brillo del traje (hombros, brazo)
+  K: PALETA.negro,     // sombras: pierna y brazo del fondo, costuras
+  Z: "#2B1D16",        // zapatos (piel marrón oscura, para no confundirse con el pantalón)
+  z: "#5A3E2B",        // brillo de los zapatos
   A: PALETA.azul,      // un píxel azul "glitch", como en la referencia
 };
 
@@ -43,127 +55,123 @@ const COLORES_PERSONAJE = {
 //  De espaldas (mirando un cuadro). Es casi simétrico.
 // =============================================================
 const ESPALDA = [
-  "......hHch......",   //  0  pelo rizado
-  ".....hcHhHh.....",
-  "....hHhcHHch....",
-  "...hHcHhHchHh...",
-  "...cHhHHhHHhc...",
-  "...HhcHhcHhHH...",   //  5
-  "...hHHhHHhcHh...",
-  "...sHcHhHHhHs...",   //  orejas
-  "...shHHhHcHHA...",
-  "....HhHHhHHh....",
-  "....hHHcHhHH....",   // 10
-  ".....HhHHhH.....",   //     nuca
+  "......hHHh......",   //  0  pelo rizado
+  "....hcHhHcHh....",
+  "....HhcHHhcH....",
+  "...hHcHhcHHch...",
+  "...cHhHCHhHcH...",
+  "...sHHhHHcHHs...",   //  5  orejas
+  "...shHcHhHHhA...",   //     (con un píxel azul "glitch" en una oreja)
+  "....HhHHcHhH....",
+  ".....hHhHHh.....",   //     nuca
   "......sSSs......",   //     cuello
-  ".....wWWWWw.....",   //     cuello de la camisa
-  "...tTTTTTTTTt...",   //     cuello de la chaqueta
-  ".utTTTTTTTTTTtu.",   // 15  hombros
-  ".tTTTTTTTTTTTTt.",
-  ".TTKTTTTTTTTKTT.",   //     brazos separados del cuerpo por una línea oscura
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",   // 20
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",
-  ".TTKTTTTTTTTKTT.",   // 25
-  ".TTKTTTKKTTTKTT.",   //     abertura de la chaqueta
-  ".TTKTTTKKTTTKTT.",
-  ".sSKTTTKKTTTKSs.",   //     manos
-  ".sSKTTTKKTTTKSs.",
-  "....TTTTTTTT....",   // 30  pantalón
-  "....TTTTTTTT....",
-  "....TTTTTTTT....",
-  "....TTTKKTTT....",   //     dos piernas
-  "....TTTKKTTT....",
-  "....TTTKKTTT....",   // 35
-  "....TTTKKTTT....",
-  "....TTTKKTTT....",
-  "....TTTKKTTT....",
-  "....TTTKKTTT....",
-  "....TTTKKTTT....",   // 40
-  "....TTTKKTTT....",
-  "...uKKK..KKKu...",   //     talones de los zapatos
-  "...KKKK..KKKK...",
+  ".....wWWWWw.....",   // 10  cuello de la camisa
+  "...tuuuuuuuut...",   //     hombros, iluminados desde arriba
+  "..tuTTTTTTTTut..",
+  "..tTTTTTTTTTTt..",
+  "..tTKTTTTTTKTt..",   //     brazos, separados del cuerpo por una costura oscura
+  "..tTKTTTTTTKTt..",   // 15
+  "..tTKTTTTTTKTt..",
+  "..tTKTTTTTTKTt..",
+  "..tTKTTTTTTKTt..",
+  "..tTKTTTTTTKTt..",
+  "..tTKTTTTTTKTt..",   // 20
+  "..tTKTTTTTTKTt..",
+  "..tTKTTTKTTKTt..",   //     abertura de la chaqueta
+  "..sSKTTTKKTKSs..",   //     manos
+  "..sSKTTTKKTKSs..",
+  "....KTTTKKTK....",   // 25  bajo de la chaqueta
+  "....tTTTTTTt....",   //     pantalón
+  "....tTTTTTTt....",
+  "....tTTKKTTt....",
+  "....tTK..KTt....",   //     dos piernas, un poco separadas
+  "....tTK..KTt....",   // 30
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",   // 35
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",
+  "....tTK..KTt....",   // 40
+  "....tTK..KTt....",
+  "....zZZ..ZZz....",   //     talones de los zapatos
+  "...ZZZZ..ZZZZ...",
 ];
 
 
 // =============================================================
 //  De lado (mirando a la derecha). Para no repetir lo que no
 //  cambia, el sprite se monta con tres piezas: cabeza (filas
-//  0–13), torso con el brazo (14–29) y piernas (30–43).
+//  0–10), torso con el brazo (11–25) y piernas (26–43).
 // =============================================================
 
 const CABEZA_LADO = [
-  "......hHch......",   //  0
-  ".....hcHhHhh....",
-  "....hHhcHHchh...",
-  "...hcHhHHhHhch..",
-  "...HhHchHhHhch..",
-  "...hHhHHcHhSSh..",   //  5  frente con un rizo encima
-  "...cHHhHhSSSSS..",
-  "...hHhHHsSSKSS..",   //     oreja (s) y ojo (K)
-  "...HhHhHsSSSSSS.",   //     nariz
-  "...hHHhHhSSSSs..",
-  "....HhHhSSSSs...",   // 10
+  "......hHHh......",   //  0
+  "....hcHhHcHh....",
+  "...hHcHhcHHch...",
+  "...cHhHCHhHcch..",   //     un rizo cae sobre la frente
+  "...hHHcHhSSSS...",
+  "...hHcHhsSSKS...",   //  5  oreja (s) y ojo (K)
+  "...HhHhHsSSSSS..",   //     nariz: un solo píxel
+  "....hHhHSSSSs...",   //     boca en sombra
   ".....HhHsSSs....",   //     mandíbula
-  "......sSSs......",   //     cuello
-  ".....wWWWw......",   //     cuello de la camisa
+  ".......sSs......",   //     cuello
+  "......tTtWW.....",   // 10  cuello de la camisa
 ];
 
-// El brazo que vemos se balancea: hacia atrás, en el centro o hacia delante
+// El brazo cercano se balancea: hacia atrás, en el centro o hacia
+// delante. Cuando va atrás, asoma por delante la mano del brazo del
+// fondo, y al revés (los brazos van siempre en sentidos opuestos).
 const TORSO_LADO = {
   centro: [
-    "....TTTTTTtW....",   // 14
-    "....TTtuuTtW....",   // 15  hombro
-    "....TTtuuTTt....",
-    "....TTtuuTTT....",
-    "....TTtuuTTT....",
-    "....TTtuuTTT....",
-    "....TTtuuTTT....",   // 20
-    "....TTTtuTTT....",   //     antebrazo
-    "....TTTtuTT.....",
-    "....TTTtuTT.....",
-    "....TTTtuTT.....",
-    "....TTTtuTT.....",   // 25
-    "....TTTtuTT.....",
-    "....TTTSsTT.....",   //     mano
+    "....tuuuutWW....",   // 11  hombro iluminado
+    "....TKuutTWw....",
+    "....TKtutTTw....",
+    "....TKtutTTT....",
+    "....TKtutTTT....",   // 15
+    "....TKtutTTT....",
+    "....TKtutTTT....",
+    "....TTKtuTTT....",   //     codo
+    "....TTKtuTT.....",
+    "....TTKtuTT.....",   // 20
+    "....TTKtuTT.....",
+    "....TTKtuTT.....",
+    "....TTKSsTT.....",   //     mano
     "....TTTSsTT.....",
-    "....KTTTTTK.....",   // 29  bajo de la chaqueta
+    "....KTTTTTK.....",   // 25  bajo de la chaqueta
   ],
   delante: [
-    "....TTTTTTtW....",
-    "....TTtuuTtW....",
-    "....TTTtuuTt....",
-    "....TTTtuuTT....",
-    "....TTTTtuuT....",
-    "....TTTTtuuT....",
-    "....TTTTTtuu....",
-    "....TTTTTtuu....",
-    "....TTTTTTTu....",
-    "....TTTTTTTtu...",
-    "....TTTTTTTtu...",
-    "....TTTTTTT.Ss..",   //     mano por delante del cuerpo
-    "....TTTTTTT.Ss..",
-    "....TTTTTTT.....",
+    "....tuuuutWW....",
+    "....TKuutTWw....",
+    "....TKtuuTTw....",
+    "....TTKtuuTT....",
+    "....TTKtuuTT....",
+    "....TTTKtuuT....",
+    "....TTTKtuuT....",
+    "....TTTTKtuu....",
+    "....TTTTTKtu....",
+    "....TTTTTTKtu...",
+    "...KTTTTTTT.tu..",   //     asoma la manga del brazo del fondo
+    "..sKTTTTTTT.Ss..",   //     mano cercana (delante) y la del fondo (detrás)
+    "..s.TTTTTTT.Ss..",
     "....TTTTTTT.....",
     "....KTTTTTK.....",
   ],
   atras: [
-    "....TTTTTTtW....",
-    "....TuutTTtW....",
-    "....uutTTTTt....",
-    "...uutTTTTTT....",
-    "...utTTTTTTT....",
-    "...utTTTTTTT....",
-    "..utTTTTTTTT....",
-    "..utTTTTTTTT....",
-    "..utTTTTTTT.....",
-    ".ut.TTTTTTT.....",
-    ".ut.TTTTTTT.....",
-    ".Ss.TTTTTTT.....",   //     mano por detrás del cuerpo
+    "....tuuuutWW....",
+    "....TuutKTWw....",
+    "....uutKTTTw....",
+    "...uutKTTTTT....",
+    "...utKTTTTTT....",
+    "..uutTTTTTTT....",
+    "..utKTTTTTTT....",
+    ".utKTTTTTTTT....",
+    ".ut.TTTTTTTK....",
+    ".ut.TTTTTTTKs...",   //     asoma la mano del brazo del fondo
+    ".Ss.TTTTTTT.s...",   //     mano cercana (detrás)
     ".Ss.TTTTTTT.....",
     "....TTTTTTT.....",
     "....TTTTTTT.....",
@@ -171,92 +179,162 @@ const TORSO_LADO = {
   ],
 };
 
-// Piernas: la que está más cerca de nosotros es "T" y la del fondo,
-// más oscura, "K". Un paso tiene cuatro posturas.
+// Piernas. La cercana es "T" con el borde delantero "t" (iluminado);
+// la del fondo es "K" con el borde delantero "T". Se dibuja primero
+// la del fondo y encima la cercana, como pasaría de verdad.
+//
+// Un paso completo tiene seis posturas (las de los dibujos animados
+// clásicos). Para cada pierna:
+//   contacto → el talón de delante toca el suelo, piernas abiertas
+//   apoyo    → el pie apoya plano, el cuerpo baja, la otra se levanta
+//   paso     → la pierna que avanza pasa por debajo, rodilla delante
 const PIERNAS_LADO = {
   quieto: [
-    ".....TTTTT......",   // 30
-    ".....TTTTT......",
-    ".....KTTTT......",
-    ".....KTTT.......",
-    ".....KTTT.......",
-    ".....KTTT.......",   // 35
-    ".....KTTT.......",
-    ".....KTTT.......",
-    ".....KTTT.......",
-    ".....KTTT.......",
-    ".....KTTT.......",   // 40
-    ".....KTTT.......",
-    ".....KKKKKu.....",   //     zapatos, con un brillo en la punta
-    ".....KKKKKKu....",
+    ".....KTTTTt.....",   // 26  cadera
+    ".....KTTTTt.....",
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",   // 30
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",   // 35
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",
+    ".....KTTTt......",   // 40
+    ".....KTTTt......",
+    ".....ZZZZZz.....",   //     zapato, con brillo en la punta
+    ".....ZZZZZZz....",
   ],
-  // 1. Pierna cercana delante, la del fondo detrás
+  // 1. Contacto: la cercana delante (el talón toca, la punta aún
+  //    levantada) y la del fondo detrás, despegando con la punta
+  contactoA: [
+    ".....KTTTTt.....",
+    ".....KTTTt......",
+    "....KKTTTTt.....",
+    "....KKTTTTt.....",
+    "....KKTTTTt.....",   // 30
+    "...KKT..TTt.....",
+    "...KKT..TTt.....",
+    "...KKT..TTTt....",
+    "..KKT....TTt....",   //     rodillas
+    "..KKT....TTt....",   // 35
+    "..KKT....TTt....",
+    "..KKT.....TTt...",
+    ".KKT......TTt...",
+    ".KKT......TTt...",
+    ".KKT......TTt...",   // 40
+    ".KKT......TTt...",
+    ".ZZZZ.....ZZZZz.",   //     el pie cercano apoya el talón…
+    "...ZZZ....ZZZ...",   //     …y la punta aún no toca el suelo
+  ],
+  // 2. Apoyo: el pie cercano plano; el del fondo ya se ha levantado
+  apoyoA: [
+    ".....KTTTTt.....",
+    ".....KTTTt......",
+    "....KKTTTTt.....",
+    "....KKTTTTt.....",
+    "....KKTTTTt.....",   // 30
+    "...KKT..TTt.....",
+    "...KKT..TTt.....",
+    "...KKT..TTt.....",
+    "...KKT..TTt.....",
+    "..KKT...TTt.....",   // 35
+    "..KKT...TTt.....",
+    ".KKT....TTt.....",
+    ".KKT....TTt.....",
+    ".KKT....TTt.....",
+    "ZZZZ....TTt.....",   // 40  pie del fondo en el aire
+    ".ZZZ....TTt.....",
+    "........ZZZZz...",
+    "........ZZZZZZ..",
+  ],
+  // 3. Paso: la cercana, recta, sostiene el cuerpo; la del fondo pasa
+  //    por debajo con la rodilla adelantada y el pie recogido
   pasoA: [
-    ".....TTTTT......",
-    ".....KTTTT......",
-    ".....KKTTT......",
-    "....KKK.TTT.....",
-    "....KKK.TTT.....",
-    "....KKK..TTT....",
-    "...KKK...TTT....",
-    "...KKK...TTT....",
-    "...KKK....TTT...",
-    "..KKK.....TTT...",
-    "..KKK.....TTT...",
-    "..KKK.....TTT...",
-    "..KKK.....KKKKu.",
-    "..KKKK....KKKKK.",
+    ".....KTTTTt.....",
+    ".....KTTTt......",
+    "......TTTt......",
+    "......TTTt......",
+    "......TTTtT.....",   // 30
+    "......TTTtKT....",   //     rodilla del fondo, asomando por delante
+    "......TTTtKT....",
+    "......TTTtT.....",
+    "......TTTt......",
+    "......TTTt......",   // 35
+    "......TTTt......",
+    ".....KTTTt......",
+    "....KKTTTt......",
+    "...ZZZTTTt......",   //     pie del fondo, recogido detrás
+    "....ZZTTTt......",   // 40
+    "......TTTt......",
+    "......ZZZZz.....",
+    "......ZZZZZZ....",
   ],
-  // 2. Se cruzan: la cercana apoya y la del fondo se levanta detrás
-  cruceA: [
-    ".....TTTTT......",
-    ".....KTTTT......",
-    ".....KTTT.......",
-    "....KKTTT.......",
-    "....KKTTT.......",
-    "....KKTTT.......",
-    "....KKTTT.......",
-    "...KK.TTT.......",
-    "..KK..TTT.......",
-    "..KKK.TTT.......",
-    "......TTT.......",
-    "......TTT.......",
-    "......KKKKu.....",
-    "......KKKKKK....",
+  // 4–6. Lo mismo con las piernas cambiadas: ahora va delante la del
+  //      fondo y es la cercana la que despega, se levanta y pasa
+  contactoB: [
+    ".....TTTtKT.....",
+    ".....TTtKT......",
+    "....TTtKKKT.....",
+    "....TTtKKKT.....",
+    "....TTtKKKT.....",   // 30
+    "...TTt..KKT.....",
+    "...TTt..KKT.....",
+    "...TTt..KKKT....",
+    "..TTt....KKT....",
+    "..TTt....KKT....",   // 35
+    "..TTt....KKT....",
+    "..TTt.....KKT...",
+    ".TTt......KKT...",
+    ".TTt......KKT...",
+    ".TTt......KKT...",   // 40
+    ".TTt......KKT...",
+    ".ZZZz.....ZZZZZ.",
+    "...ZZZ....ZZZ...",
   ],
-  // 3. Al revés que el 1: la del fondo delante, la cercana detrás
+  apoyoB: [
+    ".....TTTtKT.....",
+    ".....TTtKT......",
+    "....TTtKKKT.....",
+    "....TTtKKKT.....",
+    "....TTtKKKT.....",   // 30
+    "...TTt..KKT.....",
+    "...TTt..KKT.....",
+    "...TTt..KKT.....",
+    "...TTt..KKT.....",
+    "..TTt...KKT.....",   // 35
+    "..TTt...KKT.....",
+    ".TTt....KKT.....",
+    ".TTt....KKT.....",
+    ".TTt....KKT.....",
+    "ZZZz....KKT.....",   // 40  pie cercano en el aire
+    ".ZZZ....KKT.....",
+    "........ZZZZZ...",
+    "........ZZZZZZ..",
+  ],
   pasoB: [
-    ".....TTTTT......",
-    ".....TTTTK......",
-    ".....TTTKK......",
-    "....TTT.KKK.....",
-    "....TTT.KKK.....",
-    "....TTT..KKK....",
-    "...TTT...KKK....",
-    "...TTT...KKK....",
-    "...TTT....KKK...",
-    "..TTT.....KKK...",
-    "..TTT.....KKK...",
-    "..TTT.....KKK...",
-    "..KKu.....KKKKK.",
-    "..KKKK....KKKKK.",
-  ],
-  // 4. Se cruzan otra vez: apoya la del fondo y se levanta la cercana
-  cruceB: [
-    ".....TTTTT......",
-    ".....TTTKK......",
-    ".....TTKKK......",
-    "....TTTKKK......",
-    "....TTTKKK......",
-    "....TTTKKK......",
-    "....TT.KKK......",
-    "...TT..KKK......",
-    "..TT...KKK......",
-    "..KKu..KKK......",
-    ".......KKK......",
-    ".......KKK......",
-    ".......KKKKK....",
-    ".......KKKKKK...",
+    ".....KTTTTt.....",
+    ".....KTTTt......",
+    "......KTTt......",
+    "......KKTTt.....",
+    "......KKKTTt....",   // 30
+    "......KKKTTt....",   //     rodilla cercana, por delante
+    "......KKKTTt....",
+    "......KKKTTt....",
+    "......KKTTt.....",
+    "......KTTt......",   // 35
+    "......TTtT......",
+    ".....TTtKT......",
+    "....TTtKKT......",
+    "...ZZZzKKT......",   //     pie cercano, recogido detrás
+    "....ZZKKKT......",   // 40
+    "......KKKT......",
+    "......ZZZZZ.....",
+    "......ZZZZZZ....",
   ],
 };
 
@@ -315,8 +393,8 @@ function montarLado(torso, piernas) {
   return [...CABEZA_LADO, ...torso, ...piernas];
 }
 
-const FILAS_CUERPO = 30;      // de la 0 a la 29: cabeza y torso
-const FILAS_HOMBROS = 16;     // de la 0 a la 15: cabeza y hombros
+const FILAS_CUERPO = 26;      // de la 0 a la 25: cabeza y torso
+const FILAS_HOMBROS = 13;     // de la 0 a la 12: cabeza y hombros
 
 const QUIETO_LADO = montarLado(TORSO_LADO.centro, PIERNAS_LADO.quieto);
 
@@ -326,14 +404,16 @@ const SPRITES = {
   quieto: crearSprite("quieto", QUIETO_LADO),
   quietoRespira: crearSprite("quietoRespira", bajarFilas(QUIETO_LADO, FILAS_HOMBROS)),
 
-  // Ciclo de andar: en los pasos (piernas abiertas) el cuerpo baja un
-  // píxel y en los cruces vuelve a subir. Ese es el "rebote". El brazo
-  // va siempre al revés que la pierna cercana.
+  // Ciclo de andar en seis fotogramas. En el apoyo el cuerpo baja un
+  // píxel (carga el peso) y en los demás vuelve a subir: ese es el
+  // "rebote". El brazo cercano va siempre al revés que la pierna cercana.
   andar: [
-    crearSprite("andar0", bajarFilas(montarLado(TORSO_LADO.atras, PIERNAS_LADO.pasoA), FILAS_CUERPO)),
-    crearSprite("andar1", montarLado(TORSO_LADO.centro, PIERNAS_LADO.cruceA)),
-    crearSprite("andar2", bajarFilas(montarLado(TORSO_LADO.delante, PIERNAS_LADO.pasoB), FILAS_CUERPO)),
-    crearSprite("andar3", montarLado(TORSO_LADO.centro, PIERNAS_LADO.cruceB)),
+    crearSprite("contactoA", montarLado(TORSO_LADO.atras, PIERNAS_LADO.contactoA)),
+    crearSprite("apoyoA", bajarFilas(montarLado(TORSO_LADO.atras, PIERNAS_LADO.apoyoA), FILAS_CUERPO)),
+    crearSprite("pasoA", montarLado(TORSO_LADO.centro, PIERNAS_LADO.pasoA)),
+    crearSprite("contactoB", montarLado(TORSO_LADO.delante, PIERNAS_LADO.contactoB)),
+    crearSprite("apoyoB", bajarFilas(montarLado(TORSO_LADO.delante, PIERNAS_LADO.apoyoB), FILAS_CUERPO)),
+    crearSprite("pasoB", montarLado(TORSO_LADO.centro, PIERNAS_LADO.pasoB)),
   ],
 };
 

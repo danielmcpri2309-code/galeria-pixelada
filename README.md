@@ -100,7 +100,11 @@ portada y la cortinilla al saltar de sala.
 Los sprites son **matrices de caracteres**: cada letra es un color (`H` pelo, `T` traje, `S` piel…)
 y el punto es transparente. Al cargar la página se convierten en canvas de 16×44.
 
-- El sprite de lado se monta con piezas: cabeza, torso con el brazo y cuatro posturas de piernas.
+- El sprite de lado se monta con piezas: cabeza, torso con el brazo y las posturas de las piernas.
+- El ciclo de andar tiene **seis fotogramas**, como en la animación clásica: contacto (el talón de
+  delante toca el suelo), apoyo (el cuerpo baja al cargar el peso) y paso (la otra pierna pasa por
+  debajo con la rodilla adelantada), y lo mismo con la otra pierna. Los brazos van al revés que las
+  piernas, y la pierna y el brazo del fondo son más oscuros, pero con el borde iluminado.
 - El rebote al andar y la respiración en reposo salen de una sola función que baja un píxel la
   mitad superior del sprite.
 - La animación avanza según la **distancia recorrida**, no según el tiempo, para que los pies no
@@ -143,9 +147,16 @@ Medido en un recorrido de tres salas: el fotograma más lento bajó de 33 ms a 1
 
 Para pixelar un cuadro hay que leer sus píxeles (`getImageData`), y eso solo se puede hacer si la
 imagen llega con permiso CORS. El CDN del Met guarda en caché la versión normal de cada imagen sin
-esa cabecera, así que el juego las pide con un parámetro (`?galeria-cors`), que sí la trae. Una URL
-con ese parámetro se pide **siempre** con CORS: si se pidiera sin CORS, el CDN guardaría una copia
-sin la cabecera y fallaría para todos. Si aun así falla, el cuadro se muestra sin pixelar (plan B).
+esa cabecera, y además la copia que guarda de una URL con parámetro puede perderla con el tiempo.
+Por eso cada imagen se intenta cargar hasta tres veces:
+
+1. Con un parámetro común (`?galeria-cors`): el CDN suele tenerla en caché y llega deprisa.
+2. Si falla, con un valor único al final: el CDN no la tiene, la pide al servidor del Met y llega
+   con la cabecera.
+3. Si aun así falla, sin CORS (plan B): el cuadro se ve, pero sin pixelar.
+
+Una URL con el parámetro se pide **siempre** con CORS: pedirla sin CORS estropearía su copia en el
+CDN para todo el mundo. Por eso el visor usa la URL normal.
 
 ## Estructura
 
@@ -186,7 +197,8 @@ Por fases, comprobando el resultado al final de cada una:
 6. Portada, saltos entre salas, controles táctiles y adaptación a móvil.
 7. Ampliación de la colección con la API del Met (de 76 a 119 obras).
 
-Después: controles WASD y optimización del movimiento.
+Después: controles WASD, optimización del movimiento, rediseño del personaje (proporciones y
+ciclo de andar de seis fotogramas) y carga de imágenes más robusta.
 
 ## Créditos
 

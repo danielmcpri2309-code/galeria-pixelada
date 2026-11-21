@@ -65,6 +65,10 @@ function dibujarPortada() {
   const ancho = Math.ceil(anchoCss / escalaCss);
   const alto = Math.ceil(altoCss / escalaCss);
 
+  // Si la ventana aún no tiene tamaño (la página se abrió en un sitio que
+  // no se ve), no hay nada que dibujar: lo haremos al cambiar de tamaño.
+  if (ancho === 0 || alto === 0) return;
+
   const lienzo = portada.fondo;
   lienzo.width = ancho;
   lienzo.height = alto;
@@ -189,29 +193,36 @@ function colocarPersonajePortada(dpr) {
 
 
 // -------------------------------------------------------------
-//  Carga del cuadro de fondo (con CORS, como los de la pared)
+//  Carga del cuadro de fondo, con los mismos tres intentos que los
+//  cuadros de la pared (ver intentosDeCarga en museo.js)
 // -------------------------------------------------------------
 function cargarFondoPortada() {
   const img = new Image();
-  img.crossOrigin = "anonymous";
+  const intentos = intentosDeCarga(OBRA_PORTADA.imagen);
+  let intento = 0;
+
+  function pedir() {
+    img.crossOrigin = intentos[intento].cors ? "anonymous" : null;
+    img.src = intentos[intento].url;
+  }
+
   img.onload = () => {
     imagenPortada = img;
+    fondoSinPixelar = !intentos[intento].cors;   // plan B: se ve, pero sin pixelar
     try {
       dibujarPortada();
     } catch (error) {
-      // No podemos leer sus píxeles: se verá sin pixelar (plan B)
+      // No podemos leer sus píxeles: se verá sin pixelar
       fondoSinPixelar = true;
       dibujarPortada();
     }
   };
   img.onerror = () => {
-    // Plan B: sin CORS la imagen se puede dibujar, pero no pixelar
-    if (img.crossOrigin === null) return;   // ya lo habíamos intentado
-    img.crossOrigin = null;
-    fondoSinPixelar = true;
-    img.src = OBRA_PORTADA.imagen;
+    intento++;
+    if (intento < intentos.length) pedir();   // siguiente intento
   };
-  img.src = OBRA_PORTADA.imagen + PARAMETRO_CORS;
+
+  pedir();
 }
 
 
@@ -278,8 +289,8 @@ function iniciarPortada() {
   });
 
   ponerFavicon();
-  dibujarPortada();       // primero sin cuadro (verde azulado)…
-  cargarFondoPortada();   // …y en cuanto llegue la imagen, con él
+  cargarFondoPortada();   // pedimos la imagen primero: no depende del dibujo
+  dibujarPortada();       // mientras llega, la portada sin cuadro (verde azulado)
 }
 
 iniciarPortada();

@@ -49,7 +49,7 @@ const personaje = {
 
   // Para la animación (ver sprites.js)
   estado: "quieto",    // "andando", "quieto" o "mirando" (de espaldas, ante un cuadro)
-  fasePaso: 1,         // avanza con la distancia recorrida; su parte entera es el fotograma
+  fasePaso: FASE_AL_ARRANCAR,   // avanza con la distancia recorrida; su parte entera es el fotograma
   tiempoQuieto: 0,     // segundos que lleva parado
   cuadroDelante: null, // el cuadro que tiene delante, si hay uno
 };
@@ -382,7 +382,7 @@ function actualizar(dt) {
     personaje.fasePaso += (Math.abs(personaje.velocidad) * dt) / LONGITUD_FOTOGRAMA;
   } else {
     personaje.tiempoQuieto += dt;
-    personaje.fasePaso = 1;   // al arrancar, empieza con las piernas juntas
+    personaje.fasePaso = FASE_AL_ARRANCAR;   // al arrancar, empieza con las piernas casi juntas
   }
 
   personaje.cuadroDelante = cuadroEnPosicion(plano, personaje.x);
